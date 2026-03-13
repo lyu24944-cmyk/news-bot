@@ -128,19 +128,27 @@ async def process_source(
     source_config: dict,
     ai_semaphore: asyncio.Semaphore,
 ) -> list[dict]:
-    """处理单个源的所有文章（单篇异常不影响其他文章）。"""
-    tasks = [
-        process_single_article(article, source_config, ai_semaphore)
-        for article in articles
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    """
+    顺序处理单个源的所有文章。
+
+    根本修复：不再用 asyncio.gather 并发处理，改为逐篇顺序处理，
+    每篇之间强制等待 REQUEST_INTERVAL 秒，避免免费 AI 额度限流。
+    """
+    from processor.ai_engine import REQUEST_INTERVAL
 
     processed = []
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            logger.error("❌ [%s] 第 %d 篇处理异常: %s", source_name, i + 1, result)
-        elif result is not None:
-            processed.append(result)
+    for i, article in enumerate(articles):
+        try:
+            # 非首篇文章前等待，给 API 冷却时间
+            if i > 0:
+                logger.info("⏳ 等待 %ds 后处理第 %d/%d 篇…", REQUEST_INTERVAL, i + 1, len(articles))
+                await asyncio.sleep(REQUEST_INTERVAL)
+
+            result = await process_single_article(article, source_config, ai_semaphore)
+            if result is not None:
+                processed.append(result)
+        except Exception as exc:
+            logger.error("❌ [%s] 第 %d 篇处理异常: %s", source_name, i + 1, exc)
 
     return processed
 
