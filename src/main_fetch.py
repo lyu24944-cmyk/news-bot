@@ -90,12 +90,20 @@ async def process_single_article(
 
     if ai_raw:
         ai_result = safe_parse_ai_output(ai_raw)
+        # 如果 JSON 解析失败（返回了默认空结构），用本地降级补充
+        if not ai_result.get("headline") or ai_result.get("summary", "").startswith("解析失败"):
+            logger.warning("AI 返回了内容但 JSON 解析失败，使用本地降级。")
+            ai_result = make_fallback_result(enriched_article)
     else:
-        # 所有 Provider 都失败 → 降级结果
+        # 所有 Provider 都失败 → 本地降级
         ai_result = make_fallback_result(enriched_article)
 
     # ── 4. 校验 AI 输出 ──
     ai_result = validate_ai_output(ai_result, source_lang=lang)
+
+    # 确保 headline 永远有值
+    if not ai_result.get("headline"):
+        ai_result["headline"] = clean_title[:50] if clean_title else "(无标题)"
 
     # 合并结果
     final = {

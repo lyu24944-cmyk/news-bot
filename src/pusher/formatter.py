@@ -73,7 +73,7 @@ def format_digest(
         source_lang = news.get("source_lang", "en")
         link = news.get("link", "")
 
-        headline = ai.get("headline", news.get("title", "(无标题)"))
+        headline = ai.get("headline") or news.get("title") or "(无标题)"
         importance = ai.get("importance", 1)
         category = ai.get("category", "—")
         summary = ai.get("summary", "")
