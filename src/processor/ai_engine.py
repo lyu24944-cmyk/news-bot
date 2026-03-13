@@ -1,7 +1,7 @@
 """
 AI 分类与摘要引擎
 
-支持多 Provider 降级链: DeepSeek → OpenAI → 纯文本兜底
+支持多 Provider 降级链: GLM-5(元景) → DeepSeek → OpenAI → 纯文本兜底
 - 自动捕获限流/认证/超时异常，切换下一个 Provider
 - Prompt 模板根据 target_lang 动态注入
 - 严格 JSON 输出格式
@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 # ── AI Provider 配置 ──────────────────────────────────────
 
 AI_PROVIDERS: list[dict[str, Any]] = [
+    {
+        "name": "GLM-5 (元景)",
+        "env_key": "YUANJING_KEY",
+        "base_url": "https://maas.ai-yuanjing.com/openai/v1/chat/completions",
+        "model": "glm-5",
+    },
     {
         "name": "DeepSeek",
         "env_key": "DEEPSEEK_KEY",

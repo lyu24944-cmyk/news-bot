@@ -15,6 +15,7 @@ jobs:
     env:
       UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
       UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
+      YUANJING_KEY: ${{ secrets.YUANJING_KEY }}
       DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
       OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
 
