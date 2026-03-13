@@ -170,9 +170,10 @@ async function handleStart(env, chatId) {
     `🤖 *欢迎使用 News-Bot！*\n\n` +
     `我会根据你的偏好，定时推送精选新闻摘要。\n\n` +
     `📌 *快速开始：*\n` +
-    `1️⃣ /subscribe — 选择你感兴趣的新闻分类\n` +
-    `2️⃣ /settings — 设置推送语言和重要性阈值\n` +
-    `3️⃣ 坐等新闻推送！\n\n` +
+    `1️⃣ /now — 立即获取最新新闻\n` +
+    `2️⃣ /subscribe — 选择你感兴趣的新闻分类\n` +
+    `3️⃣ /settings — 设置推送语言和重要性阈值\n` +
+    `4️⃣ 坐等新闻推送！\n\n` +
     `输入 /help 查看所有命令。`;
   return sendMessage(env, chatId, text);
 }
@@ -205,10 +206,12 @@ async function handleHelp(env, chatId) {
   const text =
     `📖 *命令列表*\n\n` +
     `/start — 欢迎语与使用说明\n` +
+    `/now — 📰 立即获取最新新闻\n` +
     `/subscribe — 管理新闻分类订阅\n` +
     `/settings — 查看与修改推送设置\n` +
     `/help — 显示此帮助信息\n\n` +
     `💡 *Tips:*\n` +
+    `• 发送 /now 随时查看最新新闻，/now 10 可查看更多\n` +
     `• 你可以随时修改订阅分类和推送偏好\n` +
     `• 新闻按重要性评分排序，只推送你关心的内容\n` +
     `• 支持中英文新闻源`;
@@ -310,6 +313,95 @@ async function handleCallback(env, callback) {
   return answerCallback(env, callbackId, "❓ 未知操作");
 }
 
+// ── /now 即时新闻 ─────────────────────────────────────
+
+function escapeMarkdown(text) {
+  return text.replace(/[*_`\[]/g, (ch) => `\\${ch}`);
+}
+
+async function handleNow(env, chatId, count = 5) {
+  // 1. 获取今日日期 (UTC)
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+
+  // 2. 从 Redis 获取所有新闻键
+  const keys = await redisRequest(env, "KEYS", `news:${dateStr}:*`);
+  if (!keys || keys.length === 0) {
+    return sendMessage(env, chatId, "📭 今日暂无新闻数据。\n\u8bf7稍后再试，或等待下一次自动拉取。");
+  }
+
+  // 3. 读取每条新闻
+  const articles = [];
+  for (const key of keys) {
+    const raw = await redisRequest(env, "GET", key);
+    if (!raw) continue;
+    try {
+      const article = JSON.parse(raw);
+      const ai = article.ai || {};
+      if (ai.valid) {
+        articles.push(article);
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (articles.length === 0) {
+    return sendMessage(env, chatId, "📭 今日新闻均未通过 AI 校验，暂无可显示内容。");
+  }
+
+  // 4. 按 importance 降序排列，取 Top N
+  articles.sort((a, b) => (b.ai?.importance || 0) - (a.ai?.importance || 0));
+  const topN = articles.slice(0, Math.min(count, 20));
+
+  // 5. 格式化消息
+  const timeStr = now.toISOString().slice(11, 16) + " UTC";
+  const lines = [
+    `📰 *实时新闻* | ${now.toISOString().slice(0, 10)}`,
+    `⏰ ${timeStr} | 共 ${articles.length} 条，显示 Top ${topN.length}`,
+    "",
+    "━".repeat(25),
+  ];
+
+  for (let i = 0; i < topN.length; i++) {
+    const art = topN[i];
+    const ai = art.ai || {};
+    const headline = escapeMarkdown(ai.headline || art.title || "(无标题)");
+    const importance = ai.importance || 1;
+    const category = ai.category || "—";
+    const summary = ai.summary || "";
+    const link = art.link || "";
+    const stars = "⭐".repeat(Math.min(Math.max(importance, 1), 5));
+
+    lines.push("");
+    lines.push(`*${i + 1}. ${headline}*`);
+    lines.push(`   ${stars} ${importance}/5 | 📂 ${category}`);
+
+    if (summary) {
+      const short = summary.length > 150 ? summary.slice(0, 147) + "…" : summary;
+      lines.push(`   📝 ${escapeMarkdown(short)}`);
+    }
+
+    if (link) {
+      lines.push(`   🔗 [阅读原文](${link})`);
+    }
+
+    lines.push("");
+    lines.push("─".repeat(25));
+  }
+
+  lines.push("");
+  lines.push("_发送 /now 10 查看更多 | /subscribe 管理订阅_");
+
+  let message = lines.join("\n");
+  // Telegram 4096 字符限制
+  if (message.length > 4096) {
+    message = message.slice(0, 4090) + "\n...";
+  }
+
+  return sendMessage(env, chatId, message);
+}
+
 // ── Worker 入口 ───────────────────────────────────────────
 
 export default {
@@ -347,6 +439,13 @@ export default {
           case "/help":
             await handleHelp(env, chatId);
             break;
+          case "/now": {
+            // 支持 /now 或 /now 10
+            const parts = text.split(/\s+/);
+            const count = parts.length > 1 ? parseInt(parts[1], 10) || 5 : 5;
+            await handleNow(env, chatId, count);
+            break;
+          }
           default:
             // 未知命令，提示使用 /help
             if (text.startsWith("/")) {
