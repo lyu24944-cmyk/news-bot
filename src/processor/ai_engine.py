@@ -24,7 +24,7 @@ AI_PROVIDERS: list[dict[str, Any]] = [
     {
         "name": "GLM-5 (元景)",
         "env_key": "YUANJING_KEY",
-        "base_url": "https://maas.ai-yuanjing.com/openai/v1/chat/completions",
+        "base_url": "https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1/chat/completions",
         "model": "glm-5",
     },
     {
