@@ -1,0 +1,45 @@
+feeds:
+  - name: "BBC News - Top Stories"
+    url: "http://feeds.bbcnews.com/news/rss.xml"
+    backup_url: "https://feeds.bbcnews.com/news/world/rss.xml"
+    lang: "en"
+    category_hint: "world"
+    update_freq: "high"
+    fuzzy_window_hours: 2
+
+  - name: "Reuters - World News"
+    url: "https://feeds.reuters.com/reuters/topNews"
+    backup_url: "https://feeds.reuters.com/reuters/worldNews"
+    lang: "en"
+    category_hint: "world"
+    update_freq: "high"
+    fuzzy_window_hours: 1
+
+  - name: "TechCrunch"
+    url: "https://techcrunch.com/feed/"
+    lang: "en"
+    category_hint: "tech"
+    update_freq: "high"
+    fuzzy_window_hours: 3
+
+  - name: "知乎每日精选"
+    url: "https://www.zhihu.com/rss"
+    lang: "zh"
+    category_hint: "综合"
+    update_freq: "low"
+    fuzzy_window_hours: 12
+
+  - name: "36氪 - 最新资讯"
+    url: "https://36kr.com/feed"
+    backup_url: "https://www.36kr.com/feed"
+    lang: "zh"
+    category_hint: "科技"
+    update_freq: "high"
+    fuzzy_window_hours: 2
+
+  - name: "少数派"
+    url: "https://sspai.com/feed"
+    lang: "zh"
+    category_hint: "数码"
+    update_freq: "low"
+    fuzzy_window_hours: 6

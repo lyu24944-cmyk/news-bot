@@ -1,0 +1,23 @@
+name = "news-bot-telegram"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# ── 环境变量（敏感信息通过 wrangler secret 设置）──
+# 运行以下命令设置 secrets：
+#   wrangler secret put TELEGRAM_BOT_TOKEN
+#   wrangler secret put TELEGRAM_SECRET
+#   wrangler secret put UPSTASH_URL
+#   wrangler secret put UPSTASH_TOKEN
+
+[vars]
+# 非敏感变量可直接写在这里
+# EXAMPLE_VAR = "value"
+
+# ── 路由配置（可选，使用自定义域名时） ──
+# [routes]
+# pattern = "bot.yourdomain.com/*"
+# zone_name = "yourdomain.com"
+
+# ── 开发环境 ──
+[dev]
+port = 8787

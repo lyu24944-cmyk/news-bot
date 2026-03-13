@@ -1,0 +1,35 @@
+name: "📬 News Push Engine"
+
+on:
+  schedule:
+    # 每小时第 5 分钟运行，避开整点竞争
+    - cron: "5 * * * *"
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  push:
+    name: "Push News to Users"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
+      UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 📦 Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 🚀 Run push engine
+        run: python src/main_push.py

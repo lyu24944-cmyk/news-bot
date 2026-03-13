@@ -1,0 +1,27 @@
+name: "💓 Keep Repository Alive"
+
+on:
+  schedule:
+    # 每月 1 日 UTC 00:00 运行
+    - cron: "0 0 1 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  keep-alive:
+    name: "Prevent Repository from Being Disabled"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔄 Create empty commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: keep repository alive [skip ci]"
+          git push

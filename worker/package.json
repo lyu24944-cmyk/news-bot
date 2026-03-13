@@ -1,0 +1,14 @@
+{
+  "name": "news-bot-telegram",
+  "version": "1.0.0",
+  "description": "News-Bot Telegram Webhook Worker - 用户订阅管理",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
