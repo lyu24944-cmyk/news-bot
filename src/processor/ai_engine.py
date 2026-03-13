@@ -128,7 +128,8 @@ async def _call_provider(
             provider["base_url"],
             headers=headers,
             json=payload,
-            timeout=aiohttp.ClientTimeout(total=60),
+            # 核心修复: 15 秒超时快速失败，配合多次重试
+            timeout=aiohttp.ClientTimeout(total=15),
         ) as resp:
             if resp.status == 429:
                 logger.warning("[%s] 触发限流 (429)", provider["name"])
@@ -148,19 +149,26 @@ async def _call_provider(
             return None
 
     except asyncio.TimeoutError:
-        logger.warning("[%s] 请求超时 (60s)", provider["name"])
+        logger.warning("[%s] 请求超时 (15s)", provider["name"])
         return None
     except Exception as exc:
         logger.warning("[%s] 请求异常: %s", provider["name"], exc)
         return None
 
 
+# 每个 Provider 最大重试次数
+MAX_RETRIES = 3
+# 重试间隔（秒）
+RETRY_DELAY = 2
+
+
 async def call_ai_with_fallback(prompt: str) -> str | None:
     """
-    依照降级链依次尝试每个 Provider，带重试和强制间隔。
+    依照降级链依次尝试每个 Provider。
 
-    每次请求失败后等待 REQUEST_INTERVAL 秒再重试，
-    重试一次后仍失败则切换到下一个 Provider。
+    根因: GLM-5 有约 40% 的请求会服务端挂起超时。
+    修复: 15s 超时快速失败 + 每个 Provider 重试 3 次。
+    概率: 单次失败率 40%, 3 次全失败概率 = 0.4^3 = 6.4%
     """
     async with aiohttp.ClientSession() as session:
         for provider in AI_PROVIDERS:
@@ -169,20 +177,18 @@ async def call_ai_with_fallback(prompt: str) -> str | None:
                 logger.debug("[%s] 未配置 API Key，跳过", provider["name"])
                 continue
 
-            # 最多尝试 2 次（首次 + 1 次重试）
-            for attempt in range(2):
-                if attempt > 0:
-                    wait = REQUEST_INTERVAL * 2  # 重试时加倍等待
-                    logger.info("🔄 [%s] 等待 %ds 后重试…", provider["name"], wait)
-                    await asyncio.sleep(wait)
+            for attempt in range(1, MAX_RETRIES + 1):
+                if attempt > 1:
+                    logger.info("🔄 [%s] 第 %d/%d 次重试…", provider["name"], attempt, MAX_RETRIES)
+                    await asyncio.sleep(RETRY_DELAY)
 
-                logger.info("🤖 尝试 AI: %s (第%d次)", provider["name"], attempt + 1)
+                logger.info("🤖 [%s] 第 %d/%d 次请求", provider["name"], attempt, MAX_RETRIES)
                 result = await _call_provider(session, provider, api_key, prompt)
                 if result:
-                    logger.info("✅ [%s] 返回成功", provider["name"])
+                    logger.info("✅ [%s] 成功 (第%d次)", provider["name"], attempt)
                     return result
 
-            logger.warning("⚠️  [%s] 2 次均失败，切换下一个…", provider["name"])
+            logger.warning("⚠️  [%s] %d 次均失败", provider["name"], MAX_RETRIES)
 
     logger.warning("所有 AI Provider 均不可用，使用本地降级。")
     return None
