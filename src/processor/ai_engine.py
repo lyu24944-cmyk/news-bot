@@ -56,7 +56,7 @@ PROMPT_TEMPLATE_ZH = """\
 如果内容有效，输出格式：
 {{
   "valid": true,
-  "category": "分类（如：科技/财经/政治/社会/娱乐/体育/国际/教育/健康）",
+  "category": "分类（必须使用以下英文 ID: tech/world/finance/science/society/sports/health）",
   "tags": ["标签1", "标签2", "标签3"],
   "importance": 重要性评分1-5,
   "headline": "精炼标题",
