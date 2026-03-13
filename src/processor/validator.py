@@ -37,13 +37,48 @@ DEFAULT_RESULT: dict[str, Any] = {
 }
 
 
+def _try_parse_json(text: str) -> dict | None:
+    """尝试解析 JSON，自动修复常见格式问题。"""
+    # 去除 BOM 和不可见字符
+    text = text.strip().lstrip("\ufeff")
+
+    # 尝试直接解析
+    try:
+        result = json.loads(text)
+        if isinstance(result, dict):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # 修复: 移除末尾多余逗号 (trailing comma)
+    fixed = re.sub(r",\s*([}\]])", r"\1", text)
+    try:
+        result = json.loads(fixed)
+        if isinstance(result, dict):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # 修复: 单引号 → 双引号
+    fixed2 = text.replace("'", '"')
+    try:
+        result = json.loads(fixed2)
+        if isinstance(result, dict):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
+
 def safe_parse_ai_output(text: str | None) -> dict[str, Any]:
     """
-    三级 JSON 解析 fallback:
+    多级 JSON 解析 fallback:
 
-    1. 直接 json.loads
+    1. 直接解析（含自动修复）
     2. 提取 ```json``` 代码块后解析
-    3. 返回默认结构
+    3. 提取 { ... } 花括号块后解析
+    4. 返回默认结构
 
     Parameters
     ----------
@@ -57,39 +92,32 @@ def safe_parse_ai_output(text: str | None) -> dict[str, Any]:
         logger.warning("AI 返回为空，使用默认结构。")
         return DEFAULT_RESULT.copy()
 
-    # Level 1: 直接解析
-    try:
-        result = json.loads(text.strip())
-        if isinstance(result, dict):
-            return result
-    except json.JSONDecodeError:
-        pass
+    # Level 1: 直接解析（含修复）
+    result = _try_parse_json(text.strip())
+    if result:
+        return result
 
     # Level 2: 提取 ```json ... ``` 块
-    pattern = r"```(?:json)?\s*\n?(.*?)\n?\s*```"
+    pattern = r"```(?:json)?[\s\n]*(.*?)[\s\n]*```"
     match = re.search(pattern, text, re.DOTALL)
     if match:
-        try:
-            result = json.loads(match.group(1).strip())
-            if isinstance(result, dict):
-                logger.debug("从 ```json``` 块中成功解析 JSON。")
-                return result
-        except json.JSONDecodeError:
-            pass
+        result = _try_parse_json(match.group(1).strip())
+        if result:
+            logger.debug("从 ```json``` 块中成功解析 JSON。")
+            return result
 
-    # Level 2.5: 尝试找到第一个 { ... } 块
-    brace_match = re.search(r"\{.*\}", text, re.DOTALL)
-    if brace_match:
-        try:
-            result = json.loads(brace_match.group(0))
-            if isinstance(result, dict):
-                logger.debug("从花括号块中成功解析 JSON。")
-                return result
-        except json.JSONDecodeError:
-            pass
+    # Level 3: 提取第一个 { ... } 块（贪婪匹配最外层花括号）
+    brace_start = text.find("{")
+    brace_end = text.rfind("}")
+    if brace_start != -1 and brace_end > brace_start:
+        candidate = text[brace_start : brace_end + 1]
+        result = _try_parse_json(candidate)
+        if result:
+            logger.debug("从花括号块中成功解析 JSON。")
+            return result
 
-    # Level 3: 返回默认结构
-    logger.warning("JSON 解析全部失败，使用默认结构。原始文本: %.100s…", text)
+    # Level 4: 返回默认结构
+    logger.warning("JSON 解析全部失败，使用默认结构。原始文本: %.200s…", text)
     return DEFAULT_RESULT.copy()
 
 
