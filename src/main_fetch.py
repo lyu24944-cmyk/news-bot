@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ── 配置 ──────────────────────────────────────────────────
 CONFIG_PATH = PROJECT_ROOT / "config" / "feeds.yaml"
 NEWS_TTL_SECONDS = 48 * 3600  # 48 小时
-AI_CONCURRENCY = 3
+AI_CONCURRENCY = 1  # GLM-5 免费额度限流敏感，串行处理避免 429
 
 
 def load_feeds(path: Path) -> list[dict]:
