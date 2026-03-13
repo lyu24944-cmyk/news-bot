@@ -15,6 +15,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _escape_markdown(text: str) -> str:
+    """转义 Telegram Markdown V1 特殊字符。"""
+    for ch in ["*", "_", "`", "["]:
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
+
 def _importance_stars(score: int) -> str:
     """将重要性评分转为星号。"""
     return "⭐" * min(max(score, 1), 5)
@@ -73,12 +80,13 @@ def format_digest(
         tags = ai.get("tags", [])
 
         lines.append("")
-        lines.append(f"*{i}. {headline}*")
+        safe_headline = _escape_markdown(headline)
+        lines.append(f"*{i}. {safe_headline}*")
         lines.append(f"   {_importance_stars(importance)} 重要性: {importance}/5 | 📂 {category}")
 
         # 摘要
         if summary:
-            lines.append(f"   📝 {summary}")
+            lines.append(f"   📝 {_escape_markdown(summary)}")
 
         # 标签
         tag_str = _format_tags(tags)

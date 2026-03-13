@@ -169,13 +169,19 @@ async def call_ai_with_fallback(
                     logger.debug("[%s] 未配置 API Key，跳过", provider["name"])
                     continue
 
-                logger.info("🤖 尝试 AI Provider: %s", provider["name"])
-                result = await _call_provider(session, provider, api_key, prompt)
-                if result:
-                    logger.info("✅ [%s] 返回成功", provider["name"])
-                    return result
+                # 最多尝试 2 次（首次 + 1 次重试）
+                for attempt in range(2):
+                    if attempt > 0:
+                        logger.info("🔄 [%s] 重试第 %d 次…", provider["name"], attempt)
+                        await asyncio.sleep(2)  # 限流退避
 
-                logger.warning("⚠️  [%s] 失败，尝试下一个…", provider["name"])
+                    logger.info("🤖 尝试 AI Provider: %s", provider["name"])
+                    result = await _call_provider(session, provider, api_key, prompt)
+                    if result:
+                        logger.info("✅ [%s] 返回成功", provider["name"])
+                        return result
+
+                logger.warning("⚠️  [%s] 重试后仍失败，尝试下一个…", provider["name"])
 
     logger.warning("所有 AI Provider 均不可用，将使用降级结果。")
     return None

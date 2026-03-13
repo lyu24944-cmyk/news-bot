@@ -113,15 +113,24 @@ async def push_to_user(
         logger.debug("用户 %s 无匹配新闻，跳过推送。", chat_id)
         return 0
 
-    # 格式化摘要
+    # 格式化并发送，处理 Telegram 4096 字符限制
     message = format_digest(news_items, user_lang)
 
-    # Telegram 消息长度限制 4096 字符
-    if len(message) > 4096:
-        message = message[:4090] + "\n..."
-
-    # 发送
-    success = await send_telegram(chat_id, message)
+    if len(message) <= 4096:
+        # 单条消息即可
+        success = await send_telegram(chat_id, message)
+    else:
+        # 消息过长 → 分批发送（每批最多 4 条新闻）
+        success = True
+        batch_size = 4
+        for start in range(0, len(news_items), batch_size):
+            batch = news_items[start : start + batch_size]
+            batch_msg = format_digest(batch, user_lang)
+            if len(batch_msg) > 4096:
+                batch_msg = batch_msg[:4090] + "\n..."
+            batch_ok = await send_telegram(chat_id, batch_msg)
+            if not batch_ok:
+                success = False
 
     if success:
         # 标记为已推送

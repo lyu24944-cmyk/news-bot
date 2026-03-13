@@ -33,6 +33,7 @@ class UpstashRedisClient:
     ) -> None:
         self.url = (url or os.environ.get("UPSTASH_URL", "")).rstrip("/")
         self.token = token or os.environ.get("UPSTASH_TOKEN", "")
+        self._session: aiohttp.ClientSession | None = None
 
         if not self.url or not self.token:
             logger.warning(
@@ -46,34 +47,51 @@ class UpstashRedisClient:
     def enabled(self) -> bool:
         return self._enabled
 
+    @property
+    def base_url(self) -> str:
+        return self.url
+
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """获取或创建共享 HTTP Session。"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                headers={
+                    "Authorization": f"Bearer {self.token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=aiohttp.ClientTimeout(total=10),
+            )
+        return self._session
+
+    async def close(self) -> None:
+        """关闭共享 Session。"""
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+
     async def _request(self, *args: str) -> Any:
         """发送 REST 命令到 Upstash。"""
         if not self._enabled:
             return None
 
-        endpoint = f"{self.url}"
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
         body = list(args)
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    endpoint,
-                    headers=headers,
-                    data=json.dumps(body),
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status != 200:
-                        text = await resp.text()
-                        logger.error("Redis REST 请求失败 [%s]: %s", resp.status, text)
-                        return None
-                    data = await resp.json()
-                    return data.get("result")
+            session = await self._get_session()
+            async with session.post(
+                self.url,
+                data=json.dumps(body),
+            ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    logger.error("Redis REST 请求失败 [%s]: %s", resp.status, text)
+                    return None
+                data = await resp.json()
+                return data.get("result")
         except Exception as exc:
             logger.error("Redis REST 请求异常: %s", exc)
+            # Session 可能已损坏，重置
+            self._session = None
             return None
 
     # ── 基础操作 ──────────────────────────────────────────

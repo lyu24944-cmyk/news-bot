@@ -140,9 +140,9 @@ async def filter_news_for_user(
         if not ai.get("valid", False):
             continue
 
-        # b. 分类过滤
+        # b. 分类过滤（uncategorized 放行，避免 AI 降级时用户收不到新闻）
         news_category = ai.get("category", "uncategorized").lower()
-        if categories and news_category not in categories:
+        if categories and news_category not in categories and news_category != "uncategorized":
             continue
 
         # c. 重要性过滤
