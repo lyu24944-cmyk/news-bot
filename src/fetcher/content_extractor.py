@@ -110,7 +110,16 @@ def smart_truncate(text: str, lang: str = "en", max_length: int | None = None) -
     back = clean_paragraphs[-back_count:] if back_count > 0 else []
 
     parts = front + ["[...]"] + back if back else front + ["[...]"]
-    return "\n\n".join(parts)
+    result = "\n\n".join(parts)
+
+    # 5. 硬截断兜底：段落级截断后仍超限时（如单段超长），直接截断
+    if lang == "zh" and len(result) > max_length:
+        result = result[:max_length] + "\n\n[...]"
+    elif lang != "zh" and len(result.split()) > max_length:
+        words = result.split()[:max_length]
+        result = " ".join(words) + "\n\n[...]"
+
+    return result
 
 
 def extract_full_text(url: str) -> str | None:
