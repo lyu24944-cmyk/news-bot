@@ -110,9 +110,26 @@ async def filter_news_for_user(
     min_importance = user_prefs.get("min_importance", 1)
 
     # a. 时间窗口检查
-    if push_times and current_utc_hour not in push_times:
-        logger.debug("用户 %s: 当前 UTC %dh 不在推送时段 %s", chat_id, current_utc_hour, push_times)
-        return []
+    #    push_times 可能是 int 列表 [0, 6, 12] 或字符串列表 ["00:00", "06:00"]
+    if push_times:
+        allowed_hours = set()
+        for t in push_times:
+            if isinstance(t, int):
+                allowed_hours.add(t)
+            elif isinstance(t, str) and ":" in t:
+                try:
+                    allowed_hours.add(int(t.split(":")[0]))
+                except ValueError:
+                    pass
+            elif isinstance(t, str):
+                try:
+                    allowed_hours.add(int(t))
+                except ValueError:
+                    pass
+
+        if allowed_hours and current_utc_hour not in allowed_hours:
+            logger.debug("用户 %s: 当前 UTC %dh 不在推送时段 %s", chat_id, current_utc_hour, allowed_hours)
+            return []
 
     filtered = []
 

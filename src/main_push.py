@@ -71,19 +71,9 @@ async def load_today_news() -> list[dict]:
         return []
 
     date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-    index_key = f"news:index:{date_str}"
 
-    # 尝试从索引读取
-    raw_index = await redis.get(index_key)
-    if raw_index:
-        try:
-            news_keys = json.loads(raw_index)
-        except (json.JSONDecodeError, TypeError):
-            news_keys = []
-    else:
-        # 如果没有索引，尝试使用 LRANGE 读取
-        news_keys = await redis.lrange(f"news:keys:{date_str}", 0, -1)
-
+    # 使用 KEYS 命令扫描 news:{date}:* 模式的键
+    news_keys = await redis._request("KEYS", f"news:{date_str}:*")
     if not news_keys:
         logger.info("今日 (%s) 无新闻数据。", date_str)
         return []
@@ -113,7 +103,7 @@ async def push_to_user(
     int  成功推送的新闻数
     """
     chat_id = str(user_prefs.get("chat_id", ""))
-    user_lang = user_prefs.get("lang", "zh")
+    user_lang = user_prefs.get("language", user_prefs.get("lang", "zh"))
 
     if not chat_id:
         logger.warning("用户缺少 chat_id，跳过。")

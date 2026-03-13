@@ -13,7 +13,7 @@ from storage.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
-HEARTBEAT_TTL_SECONDS = 2 * 3600  # 2 小时
+HEARTBEAT_TTL_SECONDS = 10 * 3600  # 10 小时（拉取间隔 8h + 2h 缓冲）
 
 
 async def write_heartbeat(name: str) -> None:
