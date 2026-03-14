@@ -291,7 +291,7 @@ async function cmdNow(env, chatId, count) {
   articles.sort(function (a, b) {
     return (b.ai.importance || 0) - (a.ai.importance || 0);
   });
-  const top = articles.slice(0, Math.min(count, 20));
+  const top = articles.slice(0, Math.min(count, 50));
 
   // 格式化
   const lines = [];
