@@ -112,16 +112,26 @@ function editMsg(env, chatId, msgId, text, markup) {
 
 // ── 时间工具 ──
 function utcToLocal(utcTime, offset) {
-  const parts = utcTime.split(":");
-  const h = parseInt(parts[0], 10);
-  const m = parseInt(parts[1], 10);
-  const lh = ((h + offset) % 24 + 24) % 24;
-  return String(lh).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  try {
+    var s = String(utcTime || "00:00");
+    var parts = s.split(":");
+    var h = parseInt(parts[0], 10) || 0;
+    var m = parseInt(parts[1], 10) || 0;
+    var lh = ((h + offset) % 24 + 24) % 24;
+    return String(lh).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  } catch (e) {
+    return "00:00";
+  }
 }
 
 function localTimes(prefs) {
-  const off = prefs.timezone_offset || 8;
-  return (prefs.push_times_utc || []).map(function (t) { return utcToLocal(t, off); }).join(", ");
+  try {
+    var off = prefs.timezone_offset || 8;
+    var times = prefs.push_times_utc || ["00:00", "04:00", "10:00"];
+    return times.map(function (t) { return utcToLocal(t, off); }).join(", ");
+  } catch (e) {
+    return "08:00, 12:00, 18:00";
+  }
 }
 
 // ── 键盘 ──
