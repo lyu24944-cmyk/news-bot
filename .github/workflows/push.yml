@@ -1,35 +1,80 @@
-name: News Push Engine
+# 📬 News Push Engine
+# 从 Redis 读取新闻 → 按用户偏好过滤 → Telegram 推送
+#
+# 根因修复：
+# 1. 每小时 cron 触发
+# 2. 自动检测 fetch 心跳，若缺失则先触发 fetch workflow
+# 3. concurrency 防止并发重复推送
+
+name: "📬 News Push Engine"
 
 on:
   schedule:
-      - cron: "5 * * * *"
-        workflow_dispatch:
+    - cron: "5 * * * *"  # 每小时第 5 分钟
+  workflow_dispatch:
 
-        concurrency:
-          group: push-engine
-            cancel-in-progress: false
+concurrency:
+  group: push-engine
+  cancel-in-progress: false
 
-            jobs:
-              push:
-                  runs-on: ubuntu-latest
-                      timeout-minutes: 10
-                          steps:
-                                - name: Checkout
-                                        uses: actions/checkout@v4
-                                              - name: Setup Python
-                                                      uses: actions/setup-python@v5
-                                                              with:
-                                                                        python-version: "3.11"
-                                                                                  cache: pip
-                                                                                            cache-dependency-path: requirements.txt
-                                                                                                  - name: Install dependencies
-                                                                                                          run: pip install -r requirements.txt
-                                                                                                                - name: Run Push Engine
-                                                                                                                        env:
-                                                                                                                                  UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
-                                                                                                                                            UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
-                                                                                                                                                      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-                                                                                                                                                                ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
-                                                                                                                                                                        working-directory: src
-                                                                                                                                                                                run: python main_push.py
-                                                                                                                                                                                
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check fetch heartbeat and auto-trigger if missing
+        env:
+          UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
+          UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: src
+        run: |
+          # 检查 fetch 心跳，如果超过 14 小时未采集，自动触发 fetch workflow
+          python -c "
+          import asyncio, os, subprocess, sys
+          sys.path.insert(0, '.')
+          from storage.redis_client import get_redis_client
+
+          async def check():
+              redis = get_redis_client()
+              if not redis.enabled:
+                  print('Redis not enabled, skip heartbeat check')
+                  return
+              val = await redis.get('heartbeat:fetch')
+              if val:
+                  print(f'Fetch heartbeat exists: {val}')
+              else:
+                  print('⚠️ Fetch heartbeat missing! Triggering fetch workflow...')
+                  repo = os.environ.get('GITHUB_REPOSITORY', '')
+                  if repo:
+                      subprocess.run([
+                          'gh', 'workflow', 'run', 'fetch.yml',
+                          '--repo', repo, '--ref', 'main'
+                      ], check=False)
+                      print(f'Triggered fetch workflow on {repo}')
+
+          asyncio.run(check())
+          "
+
+      - name: Run Push Engine
+        env:
+          UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
+          UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+        working-directory: src
+        run: python main_push.py

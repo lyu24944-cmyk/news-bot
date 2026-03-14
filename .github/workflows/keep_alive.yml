@@ -1,27 +1,41 @@
-name: "💓 Keep Repository Alive"
+# 💓 Keep Alive — 防止仓库因不活跃被 GitHub 禁用 Actions
+#
+# 根因修复：
+# GitHub 会在仓库 60 天无 push 后自动禁用 scheduled workflows。
+# 此任务每 25 天自动 push 一个空 commit，保持仓库活跃。
+
+name: "💓 Keep Alive"
 
 on:
   schedule:
-    # 每月 1 日 UTC 00:00 运行
-    - cron: "0 0 1 * *"
+    - cron: "0 12 1,15 * *"  # 每月 1 日和 15 日 UTC 12:00 (北京 20:00)
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   keep-alive:
-    name: "Prevent Repository from Being Disabled"
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write
 
     steps:
-      - name: 📥 Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔄 Create empty commit and push
+      - name: Keep alive commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "chore: keep repository alive [skip ci]"
-          git push
+
+          # 更新时间戳文件
+          echo "Last keep-alive: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" > .github/.keep_alive
+          git add .github/.keep_alive
+
+          # 只有有变更时才 commit（避免空 commit 报错）
+          git diff --cached --quiet || {
+            git commit -m "chore: keep alive [skip ci]"
+            git push
+            echo "✅ Keep-alive commit pushed."
+          }
+
+          echo "Done."
