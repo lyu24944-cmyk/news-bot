@@ -20,9 +20,22 @@ const DEFAULT_PREFS = {
   categories: ["tech", "world", "science"],
   min_importance: 3,
   language: "zh",
-  push_times_utc: ["00:00", "06:00", "10:00"],
+  push_times_utc: ["00:00", "04:00", "10:00"],
   timezone_offset: 8,
 };
+
+// 工具函数：UTC 时间转本地时间
+function utcToLocal(utcTime, offset) {
+  const [h, m] = utcTime.split(":").map(Number);
+  const localH = ((h + offset) % 24 + 24) % 24;
+  return `${String(localH).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+function formatLocalTimes(prefs) {
+  const offset = prefs.timezone_offset || 8;
+  const utcTimes = prefs.push_times_utc || [];
+  return utcTimes.map(t => utcToLocal(t, offset)).join(", ");
+}
 
 // ── Upstash Redis REST ────────────────────────────────────
 
@@ -191,12 +204,13 @@ async function handleSubscribe(env, chatId) {
 async function handleSettings(env, chatId) {
   const prefs = await getUserPrefs(env, chatId);
   const cats = (prefs.categories || []).join(", ") || "无";
+  const localTimes = formatLocalTimes(prefs);
   const text =
     `⚙️ *当前设置*\n\n` +
     `📂 订阅分类: ${cats}\n` +
     `⭐ 最低重要性: ${prefs.min_importance || 3}\n` +
     `🌐 推送语言: ${prefs.language === "zh" ? "🇨🇳 中文" : "🇬🇧 English"}\n` +
-    `⏰ 推送时间 (UTC): ${(prefs.push_times_utc || []).join(", ")}\n\n` +
+    `⏰ 推送时间: ${localTimes} (北京时间)\n\n` +
     `点击下方按钮修改设置：`;
   const keyboard = buildSettingsKeyboard(prefs);
   return sendMessage(env, chatId, text, { reply_markup: keyboard });
@@ -304,7 +318,7 @@ async function handleCallback(env, callback) {
         `📂 订阅分类: ${cats}\n` +
         `⭐ 最低重要性: ${prefs.min_importance}\n` +
         `🌐 推送语言: ${prefs.language === "zh" ? "🇨🇳 中文" : "🇬🇧 English"}\n` +
-        `⏰ 推送时间: ${(prefs.push_times_utc || []).join(", ")}\n\n` +
+        `⏰ 推送时间: ${formatLocalTimes(prefs)} (北京时间)\n\n` +
         `新闻将根据以上偏好推送给你 📬`
     );
     return answerCallback(env, callbackId, "✅ 设置已保存");
