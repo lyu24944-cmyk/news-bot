@@ -451,12 +451,6 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // ── 安全验证 ──
-    const secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") || "";
-    if (env.TELEGRAM_SECRET && secret !== env.TELEGRAM_SECRET) {
-      return new Response("Forbidden", { status: 403 });
-    }
-
     try {
       const update = await request.json();
 
