@@ -16,22 +16,20 @@ on:
                           steps:
                                 - name: Checkout
                                         uses: actions/checkout@v4
+
                                               - name: Setup Python
                                                       uses: actions/setup-python@v5
                                                               with:
                                                                         python-version: "3.11"
-                                                                                  cache: pip
-                                                                                            cache-dependency-path: requirements.txt
-                                                                                                  - name: Install dependencies
-                                                                                                          run: pip install -r requirements.txt
+
+                                                                              - name: Install dependencies
+                                                                                      run: |
+                                                                                                python -m pip install --upgrade pip
+                                                                                                          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+                                                                                                          
                                                                                                                 - name: Run Fetch Engine
                                                                                                                         env:
-                                                                                                                                  UPSTASH_URL: ${{ secrets.UPSTASH_URL }}
-                                                                                                                                            UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
-                                                                                                                                                      DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
-                                                                                                                                                                OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
-                                                                                                                                                                          ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
-                                                                                                                                                                                    TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-                                                                                                                                                                                            working-directory: src
-                                                                                                                                                                                                    run: python main_fetch.py
-                                                                                                                                                                                                    
+                                                                                                                                  PUSH_KEY: ${{ secrets.PUSH_KEY }}
+                                                                                                                                            CONFIG_PATH: config/config.yaml
+                                                                                                                                                    run: python src/main_fetch.py
+                                                                                                                                                    
