@@ -22,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 AI_PROVIDERS: list[dict[str, Any]] = [
     {
-        "name": "GLM-5 (元景)",
-        "env_key": "YUANJING_KEY",
-        "base_url": "https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1/chat/completions",
-        "model": "glm-5",
-    },
-    {
         "name": "DeepSeek",
         "env_key": "DEEPSEEK_KEY",
         "base_url": "https://api.deepseek.com/v1/chat/completions",
         "model": "deepseek-chat",
+    },
+    {
+        "name": "GLM-5 (元景)",
+        "env_key": "YUANJING_KEY",
+        "base_url": "https://maas-api.ai-yuanjing.com/openapi/compatible-mode/v1/chat/completions",
+        "model": "glm-5",
     },
     {
         "name": "OpenAI",
