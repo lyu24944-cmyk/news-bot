@@ -42,6 +42,26 @@ async function redis(env, ...args) {
   }
 }
 
+// 批量执行多个 Redis 命令（Upstash pipeline API）
+async function redisPipeline(env, commands) {
+  try {
+    var resp = await fetch(env.UPSTASH_URL + "/pipeline", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + env.UPSTASH_TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(commands),
+    });
+    if (!resp.ok) return null;
+    var data = await resp.json();
+    return data; // [{result: ...}, {result: ...}, ...]
+  } catch (e) {
+    console.error("Redis pipeline error:", e.message);
+    return null;
+  }
+}
+
 async function getPrefs(env, chatId) {
   try {
     const raw = await redis(env, "GET", "user:" + chatId + ":prefs");
@@ -235,26 +255,32 @@ async function cmdNow(env, chatId, count) {
   }
 
   // 今日日期 (UTC)
-  const now = new Date();
-  const d = now.toISOString().slice(0, 10).replace(/-/g, "");
+  var now = new Date();
+  var d = now.toISOString().slice(0, 10).replace(/-/g, "");
 
   // 获取所有新闻键
-  const keys = await redis(env, "KEYS", "news:" + d + ":*");
+  var keys = await redis(env, "KEYS", "news:" + d + ":*");
   if (!keys || keys.length === 0) {
     return send(env, chatId, "📭 今日暂无新闻数据，请稍后再试。");
   }
 
-  // 读取新闻
-  const articles = [];
-  for (const key of keys) {
+  // 使用 pipeline 批量读取所有新闻（1次HTTP请求替代70+次）
+  var getCmds = keys.map(function (k) { return ["GET", k]; });
+  var results = await redisPipeline(env, getCmds);
+  if (!results) {
+    return send(env, chatId, "⚠️ 读取新闻失败，请稍后再试。");
+  }
+
+  var articles = [];
+  for (var i = 0; i < results.length; i++) {
     try {
-      const raw = await redis(env, "GET", key);
+      var raw = results[i] && results[i].result;
       if (!raw) continue;
-      const art = JSON.parse(raw);
+      var art = JSON.parse(raw);
       if (art.ai && art.ai.valid) {
         articles.push(art);
       }
-    } catch {}
+    } catch (e) {}
   }
 
   if (articles.length === 0) {
