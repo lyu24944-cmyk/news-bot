@@ -26,6 +26,7 @@ from storage.redis_client import get_redis_client
 from pusher.dispatcher import get_all_users, filter_news_for_user
 from pusher.formatter import format_digest
 from pusher.telegram import send_telegram, mark_pushed
+from pusher.pushplus import send_pushplus
 from monitor.heartbeat import write_heartbeat, check_heartbeat, alert_admin
 
 # ── 日志配置 ──────────────────────────────────────────────
@@ -96,7 +97,7 @@ async def push_to_user(
     news_items: list[dict],
 ) -> int:
     """
-    向单个用户推送新闻。
+    向单个用户推送新闻（Telegram + PushPlus 双渠道）。
 
     Returns
     -------
@@ -113,35 +114,44 @@ async def push_to_user(
         logger.debug("用户 %s 无匹配新闻，跳过推送。", chat_id)
         return 0
 
-    # 格式化并发送，处理 Telegram 4096 字符限制
+    # 格式化消息
     message = format_digest(news_items, user_lang)
 
+    # ── 渠道 1: Telegram ──
+    tg_success = False
     if len(message) <= 4096:
-        # 单条消息即可
-        success = await send_telegram(chat_id, message)
+        tg_success = await send_telegram(chat_id, message)
     else:
-        # 消息过长 → 分批发送（每批最多 4 条新闻）
-        success = True
+        tg_success = True
         batch_size = 4
         for start in range(0, len(news_items), batch_size):
             batch = news_items[start : start + batch_size]
             batch_msg = format_digest(batch, user_lang)
             if len(batch_msg) > 4096:
                 batch_msg = batch_msg[:4090] + "\n..."
-            batch_ok = await send_telegram(chat_id, batch_msg)
-            if not batch_ok:
-                success = False
+            if not await send_telegram(chat_id, batch_msg):
+                tg_success = False
+
+    # ── 渠道 2: PushPlus 微信推送 ──
+    pp_success = await send_pushplus(
+        content=message,
+        title=f"📰 今日新闻摘要 ({len(news_items)}条)",
+    )
+
+    success = tg_success or pp_success  # 任一渠道成功即可
 
     if success:
-        # 标记为已推送
         for news in news_items:
             news_id = news.get("fingerprint", "")
             if news_id:
                 await mark_pushed(chat_id, news_id)
-        logger.info("📬 已向用户 %s 推送 %d 条新闻。", chat_id, len(news_items))
+        channels = []
+        if tg_success: channels.append("Telegram")
+        if pp_success: channels.append("PushPlus")
+        logger.info("📬 已向用户 %s 推送 %d 条新闻 [%s]。", chat_id, len(news_items), "+".join(channels))
         return len(news_items)
     else:
-        logger.error("📭 向用户 %s 推送失败。", chat_id)
+        logger.error("📭 向用户 %s 所有渠道推送失败。", chat_id)
         return 0
 
 

@@ -76,5 +76,6 @@ jobs:
           UPSTASH_TOKEN: ${{ secrets.UPSTASH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         working-directory: src
         run: python main_push.py
