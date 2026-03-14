@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from storage.redis_client import get_redis_client
 from pusher.dispatcher import get_all_users, filter_news_for_user
 from pusher.formatter import format_digest
-from pusher.telegram import send_telegram, mark_pushed
+from pusher.telegram import send_telegram, send_telegram_with_feedback, mark_pushed
 from pusher.pushplus import send_pushplus
 from monitor.heartbeat import write_heartbeat, check_heartbeat, alert_admin
 
@@ -99,6 +99,9 @@ async def push_to_user(
     """
     向单个用户推送新闻（Telegram + PushPlus 双渠道）。
 
+    Telegram 消息的最后一批附带反馈按钮（👍/👎），
+    用户点击后通过 Vercel Webhook 回调记录到 Redis。
+
     Returns
     -------
     int  成功推送的新闻数
@@ -114,23 +117,36 @@ async def push_to_user(
         logger.debug("用户 %s 无匹配新闻，跳过推送。", chat_id)
         return 0
 
+    # 生成推送批次 ID（日期8位 + 小时2位 = 10字符）
+    batch_id = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+
     # 格式化消息
     message = format_digest(news_items, user_lang)
 
     # ── 渠道 1: Telegram ──
     tg_success = False
     if len(message) <= 4096:
-        tg_success = await send_telegram(chat_id, message)
+        # 单条消息，直接附带反馈按钮
+        tg_success = await send_telegram_with_feedback(chat_id, message, batch_id)
     else:
+        # 消息过长 → 分批发送，只在最后一批附带按钮
         tg_success = True
         batch_size = 4
-        for start in range(0, len(news_items), batch_size):
+        batches = list(range(0, len(news_items), batch_size))
+        for i, start in enumerate(batches):
             batch = news_items[start : start + batch_size]
             batch_msg = format_digest(batch, user_lang)
             if len(batch_msg) > 4096:
                 batch_msg = batch_msg[:4090] + "\n..."
-            if not await send_telegram(chat_id, batch_msg):
-                tg_success = False
+
+            is_last_batch = (i == len(batches) - 1)
+            if is_last_batch:
+                # 最后一批附带反馈按钮
+                if not await send_telegram_with_feedback(chat_id, batch_msg, batch_id):
+                    tg_success = False
+            else:
+                if not await send_telegram(chat_id, batch_msg):
+                    tg_success = False
 
     # ── 渠道 2: PushPlus 微信推送 ──
     pp_success = await send_pushplus(

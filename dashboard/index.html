@@ -194,9 +194,14 @@
     </div>
 
     <div class="charts-grid">
-        <div class="chart-card" style="grid-column: 1 / -1;">
+        <div class="chart-card">
             <h3>📈 近 7 天采集趋势</h3>
             <canvas id="chart-history" height="120"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>👍 用户反馈统计</h3>
+            <canvas id="chart-feedback" height="120"></canvas>
+            <div id="feedback-summary" style="text-align:center;margin-top:12px;color:#aaa;font-size:14px;">暂无反馈数据</div>
         </div>
     </div>
 
@@ -247,6 +252,7 @@
                     { date: "03-12", total: 48 }, { date: "03-13", total: 55 },
                     { date: "03-14", total: 67 }
                 ],
+                feedback: { useful: 5, useless: 1 },
                 health: { fetch_alive: true, push_alive: true }
             };
         }
@@ -372,6 +378,34 @@
                         }
                     }
                 });
+            }
+
+            // Feedback chart
+            const fb = data.feedback || { useful: 0, useless: 0 };
+            const fbTotal = fb.useful + fb.useless;
+            if (fbTotal > 0) {
+                new Chart(document.getElementById('chart-feedback'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['👍 有用', '👎 无用'],
+                        datasets: [{
+                            data: [fb.useful, fb.useless],
+                            backgroundColor: ['#00e676', '#ff5252'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#aaa', padding: 16 } }
+                        }
+                    }
+                });
+                const rate = ((fb.useful / fbTotal) * 100).toFixed(1);
+                document.getElementById('feedback-summary').textContent =
+                    `共 ${fbTotal} 条反馈 | 满意率 ${rate}%`;
+            } else {
+                document.getElementById('feedback-summary').textContent = '暂无反馈数据 — 推送消息底部点击 👍/👎 即可反馈';
             }
         }
 

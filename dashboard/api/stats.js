@@ -48,12 +48,14 @@ export default async function handler(req, res) {
       fetchHistory,
       heartbeatFetch,
       heartbeatPush,
+      feedbackStats,
     ] = await Promise.all([
       redis('GET', `stats:fetch:${today}`),
       redis('GET', `stats:push:${today}`),
       redis('GET', 'stats:fetch:history'),
       redis('GET', 'heartbeat:fetch'),
       redis('GET', 'heartbeat:push'),
+      redis('GET', `stats:feedback:${today}`),
     ]);
 
     // Parse stats with defaults
@@ -64,12 +66,16 @@ export default async function handler(req, res) {
       total_users: 0, total_news: 0, channels: {}
     };
     const history = fetchHistory ? JSON.parse(fetchHistory) : [];
+    const feedback_data = feedbackStats ? JSON.parse(feedbackStats) : {
+      useful: 0, useless: 0
+    };
 
     return res.status(200).json({
       updated_at: now.toISOString(),
       date: `${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}`,
       fetch: fetch_data,
       push: push_data,
+      feedback: feedback_data,
       history: history.slice(-7), // Last 7 days
       health: {
         fetch_alive: heartbeatFetch !== null,
