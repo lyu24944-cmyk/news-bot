@@ -310,6 +310,46 @@ async function handleCallback(env, callback) {
     return answerCallback(env, callbackId, "✅ 设置已保存");
   }
 
+  // ── fb:{type}:{batchId}  —  反馈按钮（👍有用 / 👎无用）
+  if (data.startsWith("fb:")) {
+    const parts = data.split(":");
+    if (parts.length === 3) {
+      const feedbackType = parts[1]; // "useful" or "useless"
+      const batchId = parts[2];     // "YYYYMMDDHH"
+      const dateStr = batchId.slice(0, 8);
+      const userId = callback.from?.id || "unknown";
+
+      // 1. 存储个人反馈 (TTL 30天)
+      await redisRequest(
+        env, "SET",
+        `feedback:${batchId}:${userId}`,
+        feedbackType,
+        "EX", String(30 * 86400)
+      );
+
+      // 2. 更新当日聚合统计
+      const statsKey = `stats:feedback:${dateStr}`;
+      const existing = await redisRequest(env, "GET", statsKey);
+      let stats = { useful: 0, useless: 0 };
+      try { stats = existing ? JSON.parse(existing) : stats; } catch {}
+
+      if (feedbackType === "useful") {
+        stats.useful += 1;
+      } else {
+        stats.useless += 1;
+      }
+
+      await redisRequest(
+        env, "SET", statsKey,
+        JSON.stringify(stats),
+        "EX", String(30 * 86400)
+      );
+
+      const emoji = feedbackType === "useful" ? "👍" : "👎";
+      return answerCallback(env, callbackId, `${emoji} 感谢反馈！你的意见帮助我们改进推送质量。`);
+    }
+  }
+
   return answerCallback(env, callbackId, "❓ 未知操作");
 }
 
