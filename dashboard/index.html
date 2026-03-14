@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 News-Bot 监控面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 30px 0 20px;
+        }
+        .header h1 {
+            font-size: 28px;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header .subtitle {
+            color: #888;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(0,210,255,0.15);
+        }
+        .stat-card .icon { font-size: 32px; margin-bottom: 8px; }
+        .stat-card .value {
+            font-size: 36px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #00d2ff, #7c4dff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-card .label { color: #aaa; font-size: 14px; margin-top: 4px; }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+        .chart-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .chart-card h3 {
+            font-size: 16px;
+            color: #ccc;
+            margin-bottom: 16px;
+        }
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            max-width: 1200px;
+            margin: 20px auto;
+        }
+        .health-item {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .health-dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .health-dot.ok { background: #00e676; box-shadow: 0 0 8px #00e676; }
+        .health-dot.fail { background: #ff1744; box-shadow: 0 0 8px #ff1744; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .source-list {
+            max-width: 1200px;
+            margin: 20px auto;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 24px;
+        }
+        .source-list h3 { color: #ccc; margin-bottom: 16px; }
+        .source-row {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .source-row:last-child { border-bottom: none; }
+        .source-name { flex: 1; font-size: 14px; }
+        .source-bar-container { flex: 2; margin: 0 12px; }
+        .source-bar {
+            height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, #00d2ff, #7c4dff);
+            transition: width 0.6s ease;
+        }
+        .source-count { width: 60px; text-align: right; color: #aaa; font-size: 13px; }
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #888;
+            font-size: 18px;
+        }
+        .error-msg {
+            text-align: center;
+            padding: 40px;
+            color: #ff6b6b;
+            background: rgba(255,107,107,0.1);
+            border-radius: 12px;
+            max-width: 600px;
+            margin: 40px auto;
+        }
+        .footer {
+            text-align: center;
+            color: #555;
+            font-size: 12px;
+            padding: 30px;
+        }
+        @media (max-width: 600px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .stat-card .value { font-size: 28px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 News-Bot 监控面板</h1>
+        <div class="subtitle" id="update-time">加载中...</div>
+    </div>
+
+    <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="icon">📡</div><div class="value" id="s-fetched">-</div><div class="label">今日采集</div></div>
+        <div class="stat-card"><div class="icon">📬</div><div class="value" id="s-pushed">-</div><div class="label">今日推送</div></div>
+        <div class="stat-card"><div class="icon">🤖</div><div class="value" id="s-ai-rate">-</div><div class="label">AI 成功率</div></div>
+        <div class="stat-card"><div class="icon">🔁</div><div class="value" id="s-dedup">-</div><div class="label">去重过滤</div></div>
+    </div>
+
+    <div class="health-grid" id="health-grid">
+        <div class="health-item">
+            <div class="health-dot" id="h-fetch"></div>
+            <span>采集引擎 (heartbeat:fetch)</span>
+            <span id="h-fetch-status" style="margin-left:auto;color:#888;">检查中</span>
+        </div>
+        <div class="health-item">
+            <div class="health-dot" id="h-push"></div>
+            <span>推送引擎 (heartbeat:push)</span>
+            <span id="h-push-status" style="margin-left:auto;color:#888;">检查中</span>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>📡 各源采集数量</h3>
+            <canvas id="chart-sources" height="250"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>🤖 AI Provider 使用占比</h3>
+            <canvas id="chart-providers" height="250"></canvas>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card" style="grid-column: 1 / -1;">
+            <h3>📈 近 7 天采集趋势</h3>
+            <canvas id="chart-history" height="120"></canvas>
+        </div>
+    </div>
+
+    <div class="source-list" id="source-list" style="display:none;">
+        <h3>📋 详细源数据</h3>
+        <div id="source-rows"></div>
+    </div>
+
+    <div class="footer">
+        Powered by News-Bot 🤖 | 数据来源: Upstash Redis | 托管: Vercel
+    </div>
+
+    <script>
+        const API_URL = '/api/stats';
+
+        async function loadStats() {
+            try {
+                const resp = await fetch(API_URL);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                renderDashboard(data);
+            } catch (err) {
+                document.getElementById('update-time').textContent = '❌ 数据加载失败: ' + err.message;
+                // Show demo data for preview
+                renderDashboard(getDemoData());
+            }
+        }
+
+        function getDemoData() {
+            return {
+                date: new Date().toISOString().slice(0, 10),
+                updated_at: new Date().toISOString(),
+                fetch: {
+                    total: 67, new: 42, deduped: 25,
+                    ai_success: 38, ai_fallback: 4,
+                    by_source: {
+                        "BBC News": 12, "Reuters": 9, "TechCrunch": 7,
+                        "36氪": 8, "The Verge": 6, "虎嗅网": 5,
+                        "Hacker News": 4, "少数派": 3, "Nature": 2,
+                        "ESPN": 3, "CNBC": 4, "NPR": 4
+                    },
+                    by_provider: { "DeepSeek": 34, "GLM-5": 5, "本地降级": 3 }
+                },
+                push: { total_users: 1, total_news: 8, channels: { "Telegram": 1, "PushPlus": 0 } },
+                history: [
+                    { date: "03-08", total: 32 }, { date: "03-09", total: 45 },
+                    { date: "03-10", total: 38 }, { date: "03-11", total: 52 },
+                    { date: "03-12", total: 48 }, { date: "03-13", total: 55 },
+                    { date: "03-14", total: 67 }
+                ],
+                health: { fetch_alive: true, push_alive: true }
+            };
+        }
+
+        function renderDashboard(data) {
+            const f = data.fetch || {};
+            const p = data.push || {};
+            const h = data.health || {};
+
+            // Update time
+            const time = data.updated_at ? new Date(data.updated_at).toLocaleString('zh-CN') : '未知';
+            document.getElementById('update-time').textContent = `📅 ${data.date} | 🕐 更新于 ${time}`;
+
+            // Stats cards
+            document.getElementById('s-fetched').textContent = f.total || 0;
+            document.getElementById('s-pushed').textContent = p.total_news || 0;
+            
+            const aiTotal = (f.ai_success || 0) + (f.ai_fallback || 0);
+            const aiRate = aiTotal > 0 ? ((f.ai_success / aiTotal) * 100).toFixed(1) + '%' : 'N/A';
+            document.getElementById('s-ai-rate').textContent = aiRate;
+            document.getElementById('s-dedup').textContent = f.deduped || 0;
+
+            // Health
+            const fetchDot = document.getElementById('h-fetch');
+            const pushDot = document.getElementById('h-push');
+            fetchDot.className = 'health-dot ' + (h.fetch_alive ? 'ok' : 'fail');
+            pushDot.className = 'health-dot ' + (h.push_alive ? 'ok' : 'fail');
+            document.getElementById('h-fetch-status').textContent = h.fetch_alive ? '✅ 正常' : '❌ 异常';
+            document.getElementById('h-push-status').textContent = h.push_alive ? '✅ 正常' : '❌ 异常';
+
+            // Source chart
+            const sources = f.by_source || {};
+            const sourceLabels = Object.keys(sources);
+            const sourceValues = Object.values(sources);
+            if (sourceLabels.length > 0) {
+                new Chart(document.getElementById('chart-sources'), {
+                    type: 'bar',
+                    data: {
+                        labels: sourceLabels,
+                        datasets: [{
+                            data: sourceValues,
+                            backgroundColor: sourceLabels.map((_, i) => 
+                                `hsla(${200 + i * 15}, 80%, 60%, 0.7)`
+                            ),
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#888', maxRotation: 45 }, grid: { display: false } },
+                            y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                        }
+                    }
+                });
+
+                // Source list
+                const maxVal = Math.max(...sourceValues, 1);
+                const listEl = document.getElementById('source-list');
+                const rowsEl = document.getElementById('source-rows');
+                listEl.style.display = 'block';
+                rowsEl.innerHTML = sourceLabels
+                    .map((name, i) => `
+                        <div class="source-row">
+                            <span class="source-name">${name}</span>
+                            <div class="source-bar-container">
+                                <div class="source-bar" style="width:${(sourceValues[i]/maxVal)*100}%"></div>
+                            </div>
+                            <span class="source-count">${sourceValues[i]} 条</span>
+                        </div>
+                    `).join('');
+            }
+
+            // Provider chart
+            const providers = f.by_provider || {};
+            const provLabels = Object.keys(providers);
+            const provValues = Object.values(providers);
+            if (provLabels.length > 0) {
+                new Chart(document.getElementById('chart-providers'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: provLabels,
+                        datasets: [{
+                            data: provValues,
+                            backgroundColor: ['#00d2ff', '#7c4dff', '#ff6b6b', '#ffd93d'],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#aaa', padding: 16 } }
+                        }
+                    }
+                });
+            }
+
+            // History chart
+            const history = data.history || [];
+            if (history.length > 0) {
+                new Chart(document.getElementById('chart-history'), {
+                    type: 'line',
+                    data: {
+                        labels: history.map(h => h.date),
+                        datasets: [{
+                            label: '采集数量',
+                            data: history.map(h => h.total),
+                            borderColor: '#00d2ff',
+                            backgroundColor: 'rgba(0,210,255,0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 6,
+                            pointBackgroundColor: '#00d2ff',
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { ticks: { color: '#888' }, grid: { display: false } },
+                            y: { ticks: { color: '#888' }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Load on page ready
+        loadStats();
+        // Auto refresh every 5 minutes
+        setInterval(loadStats, 300000);
+    </script>
+</body>
+</html>

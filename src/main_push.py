@@ -208,7 +208,23 @@ async def main() -> None:
             chat_id = user_prefs.get("chat_id", "?")
             logger.error("❌ 用户 %s 推送异常: %s", chat_id, exc)
 
-    # ── 5. 写入推送心跳 ──
+    # ── 5. 写入推送统计到 Redis（供监控面板读取）──
+    redis = get_redis_client()
+    if redis.enabled:
+        date_str = now.strftime("%Y%m%d")
+        push_stats = {
+            "total_users": total_users,
+            "total_news": total_pushed,
+            "channels": {"Telegram": total_users, "PushPlus": 0},
+        }
+        await redis.set(
+            f"stats:push:{date_str}",
+            json.dumps(push_stats, ensure_ascii=False),
+            ex=72 * 3600,
+        )
+        logger.info("📊 推送统计已写入 Redis: stats:push:%s", date_str)
+
+    # ── 6. 写入推送心跳 ──
     await write_heartbeat("push")
 
     logger.info(
@@ -219,3 +235,4 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+

@@ -242,6 +242,8 @@ async def main() -> None:
 
     # 4. 去重 + 全文提取 + AI + 校验 + 存储
     stats = {"total_raw": 0, "deduped": 0, "ai_processed": 0, "ai_fallback": 0, "errors": 0}
+    by_source: dict[str, int] = {}
+    by_provider: dict[str, int] = {"DeepSeek": 0, "GLM-5": 0, "本地降级": 0}
     final_results: dict[str, list[dict]] = {}
 
     for source_name, articles in raw_results.items():
@@ -252,12 +254,14 @@ async def main() -> None:
 
         deduped_count = len(articles) - len(processed)
         stats["deduped"] += max(0, deduped_count)
+        by_source[source_name] = len(processed)
 
         # 统计 AI 处理情况
         for art in processed:
             ai = art.get("ai", {})
             if ai.get("category") == "uncategorized" and ai.get("summary", "").startswith("AI 服务"):
                 stats["ai_fallback"] += 1
+                by_provider["本地降级"] += 1
             else:
                 stats["ai_processed"] += 1
 
@@ -266,10 +270,45 @@ async def main() -> None:
     # 5. 打印结果
     print_results(final_results, stats)
 
-    # 6. 写入抓取心跳
+    # 6. 写入统计数据到 Redis（供监控面板读取）
+    redis = get_redis_client()
+    if redis.enabled:
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+        stats_data = {
+            "total": stats["total_raw"],
+            "new": stats["ai_processed"] + stats["ai_fallback"],
+            "deduped": stats["deduped"],
+            "ai_success": stats["ai_processed"],
+            "ai_fallback": stats["ai_fallback"],
+            "by_source": by_source,
+            "by_provider": by_provider,
+        }
+        await redis.set(
+            f"stats:fetch:{date_str}",
+            json.dumps(stats_data, ensure_ascii=False),
+            ex=72 * 3600,
+        )
+
+        # 更新 7 天滚动历史
+        short_date = datetime.now(timezone.utc).strftime("%m-%d")
+        history_raw = await redis.get("stats:fetch:history")
+        history = json.loads(history_raw) if history_raw else []
+        # 去掉同日重复
+        history = [h for h in history if h.get("date") != short_date]
+        history.append({"date": short_date, "total": stats["total_raw"]})
+        history = history[-7:]  # 只保留最近 7 天
+        await redis.set(
+            "stats:fetch:history",
+            json.dumps(history, ensure_ascii=False),
+            ex=30 * 86400,
+        )
+        logger.info("📊 统计数据已写入 Redis: stats:fetch:%s", date_str)
+
+    # 7. 写入抓取心跳
     await write_heartbeat("fetch")
     logger.info("💓 heartbeat:fetch 已写入。")
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+
